@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Person } from "@/lib/types";
@@ -34,9 +35,9 @@ export default function PassportsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { readEncryptedJson } = await import("@/lib/secureJsonStore");
-        const partners = await readEncryptedJson<Person[]>("partners.json");
-        const answers = await readEncryptedJson<Record<number, string>>("passport-answers.json");
+        const res = await fetch("/api/passport-data");
+        if (!res.ok) throw new Error("Failed to fetch passport data");
+        const { partners, answers } = await res.json();
         setPassport({
           name: answers?.[1] || "",
           nickname: answers?.[2] || undefined,
@@ -55,6 +56,7 @@ export default function PassportsPage() {
     })();
   }, []);
 
+  const [shareSupported, setShareSupported] = useState(false);
   useEffect(() => {
     setShareSupported(typeof window !== "undefined" && !!navigator.share);
   }, []);
