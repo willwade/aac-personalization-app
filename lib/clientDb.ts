@@ -4,25 +4,35 @@
 
 import { createStore, get, set, del, update, keys } from 'idb-keyval';
 
-// Create a custom store for AAC data
-const aacStore = createStore('aac-personalization-db', 'aac-store');
+// SSR-safe: only create the store in the browser
+const isBrowser = typeof window !== "undefined" && typeof indexedDB !== "undefined";
+const aacStore = isBrowser ? createStore('aac-personalization-db', 'aac-store') : undefined;
+
+function assertBrowser() {
+  if (!isBrowser) throw new Error("IndexedDB is only available in the browser (client-side). This function cannot be called on the server.");
+}
 
 export async function saveData<T>(key: string, value: T): Promise<void> {
-  await set(key, value, aacStore);
+  assertBrowser();
+  await set(key, value, aacStore!);
 }
 
 export async function loadData<T>(key: string): Promise<T | undefined> {
-  return get<T>(key, aacStore);
+  assertBrowser();
+  return get<T>(key, aacStore!);
 }
 
 export async function deleteData(key: string): Promise<void> {
-  await del(key, aacStore);
+  assertBrowser();
+  await del(key, aacStore!);
 }
 
 export async function updateData<T>(key: string, updater: (old: T | undefined) => T): Promise<void> {
-  await update(key, updater, aacStore);
+  assertBrowser();
+  await update(key, updater, aacStore!);
 }
 
 export async function getAllKeys(): Promise<IDBValidKey[]> {
-  return keys(aacStore);
+  assertBrowser();
+  return keys(aacStore!);
 }

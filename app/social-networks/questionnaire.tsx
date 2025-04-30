@@ -228,14 +228,17 @@ export default function SocialNetworkQuestionnaire() {
         placeholder: "Your answer here...",
         isAdaptive: true,
       }
-    setQuestions([...questions, newQuestion])
-      setSuggestedAnswers(data.suggestedAnswers || [])
-      setCurrentQuestion(questions.length) // Move to the new question
+    setQuestions(prevQuestions => {
+      const updated = [...prevQuestions, newQuestion];
+      setCurrentQuestion(updated.length - 1);
+      return updated;
+    });
+    setSuggestedAnswers(data.suggestedAnswers || []);
 
-      toast({
-        title: "Follow-up question generated",
-        description: "The AI has created a personalized follow-up question based on your previous answers.",
-      })
+    toast({
+      title: "Follow-up question generated",
+      description: "The AI has created a personalized follow-up question based on your previous answers.",
+    });
     } catch (error) {
       console.error("Error generating adaptive question:", error)
       toast({

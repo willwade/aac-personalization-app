@@ -54,14 +54,82 @@ If any section cannot be determined from the responses, include an empty array f
 `,
     })
 
-    // Parse the JSON response
-    try {
-      const analysisData = JSON.parse(text)
-      return NextResponse.json(analysisData)
-    } catch (parseError) {
-      console.error("Error parsing AI response:", parseError)
-      return NextResponse.json({ error: "Failed to parse analysis results", rawText: text }, { status: 500 })
+    // Robustly parse the response (plain JSON, code block, or Vercel/streamed)
+    let parsed;
+    let jsonString = '';
+    let data: any = text;
+    // If text is a string, try to parse as JSON
+    if (typeof text === 'string') {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        // leave as string
+      }
     }
+    // If data is an object with numbered keys (Vercel AI SDK style)
+    if (data && typeof data === 'object') {
+      const numberedKeys = Object.keys(data)
+        .filter(k => /^\d+$/.test(k))
+        .sort((a, b) => Number(a) - Number(b));
+      if (numberedKeys.length > 0) {
+        const concatenated = numberedKeys.map(k => data[k]).join('');
+        // Extract code block
+        const codeBlockMatch = concatenated.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (codeBlockMatch) {
+          jsonString = codeBlockMatch[1];
+          try {
+            parsed = JSON.parse(jsonString);
+          } catch (err) {
+            console.error('Failed to parse JSON from code block (numbered keys):', err, jsonString);
+            parsed = { error: 'Invalid JSON in code block', raw: jsonString };
+          }
+        } else {
+          // Try to extract JSON from any curly-brace block
+          const curlyBlockMatch = concatenated.match(/({[\s\S]*})/);
+          if (curlyBlockMatch) {
+            jsonString = curlyBlockMatch[1];
+            try {
+              parsed = JSON.parse(jsonString);
+            } catch (err2) {
+              console.error('Failed to parse JSON from curly braces (numbered keys):', err2, jsonString);
+              parsed = { error: 'Invalid JSON in curly braces', raw: jsonString };
+            }
+          } else {
+            parsed = { error: 'No JSON found in streamed response', raw: concatenated };
+          }
+        }
+        return NextResponse.json(parsed);
+      }
+    }
+    // If data is a string, try to extract code block or curly braces
+    if (typeof data === 'string') {
+      const codeBlockMatch = data.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (codeBlockMatch) {
+        jsonString = codeBlockMatch[1];
+        try {
+          parsed = JSON.parse(jsonString);
+        } catch (err) {
+          console.error('Failed to parse JSON from code block:', err, jsonString);
+          parsed = { error: 'Invalid JSON in code block', raw: jsonString };
+        }
+      } else {
+        const curlyBlockMatch = data.match(/({[\s\S]*})/);
+        if (curlyBlockMatch) {
+          jsonString = curlyBlockMatch[1];
+          try {
+            parsed = JSON.parse(jsonString);
+          } catch (err2) {
+            console.error('Failed to parse JSON from curly braces:', err2, jsonString);
+            parsed = { error: 'Invalid JSON in curly braces', raw: jsonString };
+          }
+        } else {
+          parsed = { error: 'No JSON found in response', raw: data };
+        }
+      }
+      return NextResponse.json(parsed);
+    }
+    // Fallback: return whatever data is
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Error in analyze-responses API:", error)
     return NextResponse.json({ error: "Failed to analyze responses" }, { status: 500 })

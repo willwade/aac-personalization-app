@@ -1,48 +1,92 @@
-import { openai } from "@ai-sdk/openai"
-import { streamText } from "ai"
-import { NextResponse } from "next/server"
+import { NextResponse } from "next/server";
+import { ChatOpenAI } from "@langchain/openai";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "openai"; // "openai" or "gemini"
 
 export async function POST(req: Request) {
   try {
-    const { previousQuestions, previousAnswers, currentQuestion } = await req.json()
+    const body = await req.json();
+    const { previousQuestions, previousAnswers, currentQuestionText } = body;
 
-    // Create a context from previous Q&A pairs
-    const context = previousQuestions
-      .map((q: string, i: number) => {
-        return `Question: ${q}\nAnswer: ${previousAnswers[i] || "Not answered"}`
-      })
-      .join("\n\n")
+    // Fallback: static adaptive question and suggestions for demo
+    if ((LLM_PROVIDER === "openai" && !OPENAI_API_KEY) || (LLM_PROVIDER === "gemini" && !GEMINI_API_KEY)) {
+      return NextResponse.json({
+        question: "[DEMO] What is one goal you have for improving communication?",
+        suggestedAnswers: [
+          "Initiate more conversations",
+          "Express feelings independently",
+          "Participate in group activities"
+        ],
+        error: "No LLM API key set. Using demo fallback."
+      }, { status: 200 });
+    }
 
-    const prompt = `
-You are an expert in AAC (Augmentative and Alternative Communication) and helping to build personalized communication systems.
+    const prompt = `Given the following questionnaire context for an AAC user, suggest the next most relevant question and 3 suggested answers.\n\nPrevious questions: ${JSON.stringify(previousQuestions)}\nPrevious answers: ${JSON.stringify(previousAnswers)}\nCurrent question: ${currentQuestionText}\n\nRespond in JSON with { question, suggestedAnswers }.`;
 
-Based on the following previous questions and answers from a caregiver about an AAC user:
+    // Provider switch
+    let llm;
+    if (LLM_PROVIDER === "gemini") {
+      llm = new ChatGoogleGenerativeAI({
+        apiKey: GEMINI_API_KEY!,
+        model: "gemini-pro",
+        maxOutputTokens: 300,
+        temperature: 0.7,
+      });
+    } else {
+      llm = new ChatOpenAI({
+        apiKey: OPENAI_API_KEY!,
+        modelName: "gpt-4o",
+        maxTokens: 300,
+        temperature: 0.7,
+      });
+    }
 
-${context}
+    const response = await llm.invoke([
+      { role: "system", content: "You are an expert in AAC and adaptive communication assessment." },
+      { role: "user", content: prompt },
+    ]);
 
-The current question is: "${currentQuestion}"
+    // Log the raw LLM response for debugging
+    console.log("Raw LLM response:", response);
+    console.log("Raw LLM response.content:", response.content);
 
-Please generate:
-1. A follow-up question that digs deeper into the response and helps gather more specific information about the AAC user's communication needs, preferences, and social network.
-2. 2-3 suggested answer options that might help guide the caregiver if they're unsure how to respond.
+    // Strictly extract JSON from response.content only
+    let jsonString = "";
+    if (typeof response.content === "string") {
+      // Try to extract a code block
+      const codeBlockMatch = response.content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        jsonString = codeBlockMatch[1];
+      } else {
+        // Try to find the first {...} block
+        const curlyBlockMatch = response.content.match(/({[\s\S]*})/);
+        if (curlyBlockMatch && curlyBlockMatch[1]) {
+          jsonString = curlyBlockMatch[1];
+        }
+      }
+    }
 
-Format your response as JSON with the following structure:
-{
-  "followUpQuestion": "Your follow-up question here",
-  "suggestedAnswers": ["Suggestion 1", "Suggestion 2", "Suggestion 3"]
-}
-
-Make your follow-up question specific, empathetic, and focused on gathering actionable information that would help personalize an AAC system.
-`
-
-    const result = streamText({
-      model: openai("gpt-4o"),
-      prompt,
-    })
-
-    return result.toDataStreamResponse()
-  } catch (error) {
-    console.error("Error in adaptive questions API:", error)
-    return NextResponse.json({ error: "Failed to generate adaptive questions" }, { status: 500 })
+    if (jsonString) {
+      try {
+        const parsed = JSON.parse(jsonString);
+        // Only return the parsed object (question & suggestedAnswers)
+        return NextResponse.json(parsed, { status: 200 });
+      } catch (err) {
+        console.error("Failed to parse JSON from model response:", err, jsonString);
+        return NextResponse.json({ error: "Failed to parse JSON from LLM response", raw: jsonString }, { status: 500 });
+      }
+    } else {
+      // No valid JSON found in LLM response.content
+      return NextResponse.json({ error: "No JSON found in LLM response", raw: response.content }, { status: 500 });
+    }
+  } catch (e) {
+    console.error("Unexpected error in /api/adaptive-questions:", e);
+    if (typeof e === "object" && e !== null && "message" in e) {
+      return NextResponse.json({ error: "An unknown error occurred (outer catch)", details: (e as any).message }, { status: 500 });
+    }
+    return NextResponse.json({ error: "An unknown error occurred (outer catch)", details: e }, { status: 500 });
   }
 }
