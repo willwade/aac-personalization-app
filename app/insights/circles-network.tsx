@@ -1,3 +1,4 @@
+"use client";
 
 import CirclesOfCommunication, { CommunicationPartner } from "@/components/CirclesOfCommunication";
 import SocialNetworkGraph, { GraphNode } from "@/components/SocialNetworkGraph";
