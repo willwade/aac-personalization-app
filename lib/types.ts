@@ -1,14 +1,18 @@
 // Social Network Types
+// Communication Partner (Person) for Circles of Communication
 export type Person = {
-  id: string
-  name: string
-  role: string
-  relationship: string
-  communicationFrequency: "daily" | "weekly" | "monthly" | "rarely"
-  communicationPreferences: string[]
-  topics: string[]
-  notes: string
-}
+  id: string;
+  name: string;
+  role: string; // e.g. "wife", "friend", "physiotherapist"
+  relationship: string;
+  circle?: 1 | 2 | 3 | 4 | 5; // 1=Family, 2=Friends, 3=Acquaintances, 4=Paid Workers, 5=Unfamiliar
+  communicationFrequency?: "daily" | "weekly" | "monthly" | "rarely";
+  communicationStyle?: string; // e.g. "Informal, affectionate"
+  commonTopics?: string[]; // e.g. ["Family events", "Sports"]
+  communicationPreferences?: string[];
+  topics?: string[];
+  notes?: string;
+};
 
 export type Place = {
   id: string

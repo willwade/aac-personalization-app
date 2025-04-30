@@ -24,7 +24,7 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p>Build a structured representation of the user's social network through guided questionnaires.</p>
+              <p>Build a structured representation of the user&apos;s social network through guided questionnaires.</p>
             </CardContent>
             <CardFooter>
               <Button asChild className="w-full">
@@ -39,7 +39,7 @@ export default function Home() {
             <CardHeader>
               <PieChart className="h-8 w-8 mb-2 text-primary" />
               <CardTitle>Visualizations</CardTitle>
-              <CardDescription>Generate interactive "Circles of Communication" visualizations</CardDescription>
+              <CardDescription>Generate interactive &quot;Circles of Communication&quot; visualizations</CardDescription>
             </CardHeader>
             <CardContent>
               <p>
@@ -81,7 +81,7 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <p>
-                Create shareable documents that help new communication partners understand preferences and contexts.
+                Create shareable documents that help new communication partners understand preferences and contexts. Share your passport with others by clicking &quot;Share&quot; or download a PDF copy.
               </p>
             </CardContent>
             <CardFooter>

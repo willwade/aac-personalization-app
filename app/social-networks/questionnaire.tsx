@@ -15,58 +15,136 @@ import { Badge } from "@/components/ui/badge"
 type QuestionType = {
   id: number
   question: string
-  type: "text" | "textarea" | "radio" | "info"
+  type: "text" | "textarea" | "radio" | "info" | "select"
   options?: string[]
   placeholder?: string
   isAdaptive?: boolean
 }
-
 const initialQuestions: QuestionType[] = [
+  // Passport: Personal Details
   {
     id: 1,
-    question: "Let's start building a social network map. This will help personalize AAC experiences.",
-    type: "info",
+    question: "What is the AAC user's full name?",
+    type: "text",
+    placeholder: "e.g., John Smith",
   },
   {
     id: 2,
+    question: "Does the AAC user have a preferred nickname?",
+    type: "text",
+    placeholder: "e.g., Johnny or leave blank",
+  },
+  {
+    id: 3,
+    question: "Write a short greeting or introduction for the passport.",
+    type: "textarea",
+    placeholder: "e.g., Hi! I'm Johnny. I love chatting about football, movies, and family.",
+  },
+  // Partner questions (as before)
+  {
+    id: 4,
     question: "Who are the primary caregivers or family members that interact with the AAC user daily?",
     type: "textarea",
     placeholder: "List names and relationships (e.g., Jane - mother, John - father)",
   },
   {
-    id: 3,
-    question: "What professionals regularly interact with the AAC user? (teachers, therapists, etc.)",
-    type: "textarea",
-    placeholder: "List names and roles (e.g., Ms. Smith - teacher, Dr. Jones - speech therapist)",
-  },
-  {
-    id: 4,
-    question: "What are the main locations where the AAC user communicates?",
-    type: "textarea",
-    placeholder: "List places (e.g., home, school, therapy center)",
-  },
-  {
     id: 5,
-    question: "How would you describe the AAC user's comfort level with new communication partners?",
-    type: "radio",
-    options: ["Very comfortable", "Somewhat comfortable", "Neutral", "Somewhat uncomfortable", "Very uncomfortable"],
+    question: "For each person listed above, what is their relationship to the AAC user? (e.g., mother, brother)",
+    type: "text",
+    placeholder: "e.g., Jane - mother, John - father",
   },
   {
     id: 6,
-    question: "What topics or activities does the AAC user enjoy discussing or participating in?",
-    type: "textarea",
-    placeholder: "List topics and activities (e.g., dinosaurs, swimming, music)",
+    question: "For each person, which communication circle do they belong to?",
+    type: "select",
+    options: [
+      "1 - Family",
+      "2 - Friends",
+      "3 - Acquaintances",
+      "4 - Paid Workers",
+      "5 - Unfamiliar Partners"
+    ],
+    placeholder: "Select circle for each person",
   },
-]
+  {
+    id: 7,
+    question: "How often does the AAC user communicate with each person?",
+    type: "select",
+    options: ["Daily", "Weekly", "Monthly", "Rarely"],
+    placeholder: "Select frequency for each person",
+  },
+  {
+    id: 8,
+    question: "What is the usual communication style with each person?",
+    type: "text",
+    placeholder: "e.g., Informal, affectionate, professional",
+  },
+  {
+    id: 9,
+    question: "What are common topics discussed with each person? (comma separated)",
+    type: "text",
+    placeholder: "e.g., Family, Sports, Work",
+  },
+  {
+    id: 10,
+    question: "Any additional notes about communication with each person?",
+    type: "textarea",
+    placeholder: "Optional notes",
+  },
+  // Passport: Communication Preferences
+  {
+    id: 11,
+    question: "What are the AAC user's preferred modes of communication?",
+    type: "textarea",
+    placeholder: "e.g., AAC device, gestures, yes/no responses",
+  },
+  {
+    id: 12,
+    question: "Describe the user's preferred communication speed and style.",
+    type: "textarea",
+    placeholder: "e.g., I prefer slow, clear questions. Short sentences work best.",
+  },
+  {
+    id: 13,
+    question: "Are there any specific communication needs or barriers?",
+    type: "textarea",
+    placeholder: "e.g., Needs extra time to respond, difficulty with background noise, etc.",
+  },
+  // Passport: Tips for Partners
+  {
+    id: 14,
+    question: "List any tips for new communication partners (bullet points).",
+    type: "textarea",
+    placeholder: "e.g., Please speak slowly. Ask yes/no questions when possible.",
+  },
+  // Passport: Medical/Accessibility Info
+  {
+    id: 15,
+    question: "Any critical medical or accessibility information? (optional)",
+    type: "textarea",
+    placeholder: "e.g., Requires eye-gaze technology, tires easily, etc.",
+  },
+  // Passport: Likes/Dislikes
+  {
+    id: 16,
+    question: "List any likes/dislikes, hobbies, or interests useful for conversation starters.",
+    type: "textarea",
+    placeholder: "e.g., Likes: football, gardening. Dislikes: loud noises.",
+  },
+];
+
+import { Person } from "@/lib/types";
 
 export default function SocialNetworkQuestionnaire() {
-  const [questions, setQuestions] = useState<QuestionType[]>(initialQuestions)
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [answers, setAnswers] = useState<Record<number, string>>({})
-  const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false)
-  const [suggestedAnswers, setSuggestedAnswers] = useState<string[]>([])
-  const { toast } = useToast()
-  const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null)
+  const [questions, setQuestions] = useState<QuestionType[]>(initialQuestions);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [partners, setPartners] = useState<Person[]>([]);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
+  const [suggestedAnswers, setSuggestedAnswers] = useState<string[]>([]);
+  const { toast } = useToast();
+  const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
 
   const handleAnswerChange = useCallback(
     (value: string) => {
@@ -87,26 +165,37 @@ export default function SocialNetworkQuestionnaire() {
       })
       setSelectedSuggestion(null) // Reset after applying
     }
-  }, [selectedSuggestion, toast, handleAnswerChange])
+ }, [selectedSuggestion, toast, handleAnswerChange])
 
   const handleNext = async () => {
     if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
+      setCurrentQuestion(currentQuestion + 1);
     } else {
-      // We're at the last question, generate a follow-up if it's not an info type
-      if (questions[currentQuestion].type !== "info") {
-        await generateAdaptiveQuestion()
-      }
+      // All questions for a partner answered; group into Person and add to partners
+      const person: Person = {
+        id: Math.random().toString(36).substring(2, 10),
+        name: answers[2] || "",
+        role: answers[3] || "",
+        circle: answers[4] ? (parseInt(answers[4][0], 10) as 1|2|3|4|5) : undefined,
+        communicationFrequency: (answers[5]?.toLowerCase() as "daily"|"weekly"|"monthly"|"rarely") || undefined,
+        communicationStyle: answers[6] || undefined,
+        commonTopics: answers[7] ? answers[7].split(",").map(t => t.trim()).filter(Boolean) : undefined,
+        notes: answers[8] || undefined,
+        relationship: answers[3] || "",
+      };
+      setPartners(prev => [...prev, person]);
+      setAnswers({});
+      setCurrentQuestion(1); // Restart at first partner question (skip intro)
+      setIsReviewing(true); // Show review after each partner
     }
-  }
+ };
 
   const handlePrevious = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion(currentQuestion - 1)
     }
-  }
-
-  const handleSave = () => {
+ }
+ const handleSave = () => {
     // In a real app, this would save to a database
     console.log("Saving answers:", answers)
     toast({
@@ -114,8 +203,7 @@ export default function SocialNetworkQuestionnaire() {
       description: "Your social network information has been saved successfully.",
     })
   }
-
-  const generateAdaptiveQuestion = async () => {
+ const generateAdaptiveQuestion = async () => {
     try {
       setIsGeneratingQuestion(true)
 
@@ -140,8 +228,7 @@ export default function SocialNetworkQuestionnaire() {
       if (!response.ok) {
         throw new Error("Failed to generate adaptive question")
       }
-
-      const data = await response.json()
+     const data = await response.json()
 
       // Add the new adaptive question
       const newQuestion: QuestionType = {
@@ -151,8 +238,7 @@ export default function SocialNetworkQuestionnaire() {
         placeholder: "Your answer here...",
         isAdaptive: true,
       }
-
-      setQuestions([...questions, newQuestion])
+     setQuestions([...questions, newQuestion])
       setSuggestedAnswers(data.suggestedAnswers || [])
       setCurrentQuestion(questions.length) // Move to the new question
 
@@ -170,13 +256,11 @@ export default function SocialNetworkQuestionnaire() {
     } finally {
       setIsGeneratingQuestion(false)
     }
-  }
-
-  const useSuggestedAnswer = (answer: string) => {
+ }
+ const useSuggestedAnswer = (answer: string) => {
     setSelectedSuggestion(answer)
   }
-
-  const renderQuestionInput = () => {
+ const renderQuestionInput = () => {
     const question = questions[currentQuestion]
 
     switch (question.type) {
@@ -184,19 +268,19 @@ export default function SocialNetworkQuestionnaire() {
         return (
           <Input
             value={answers[question.id] || ""}
-            onChange={(e) => handleAnswerChange(e.target.value)}
-            placeholder={question.placeholder}
-          />
+           onChange={(e) => handleAnswerChange(e.target.value)}
+           placeholder={question.placeholder}
+         />
         )
       case "textarea":
         return (
           <div className="space-y-4">
             <Textarea
               value={answers[question.id] || ""}
-              onChange={(e) => handleAnswerChange(e.target.value)}
-              placeholder={question.placeholder}
-              rows={4}
-            />
+             onChange={(e) => handleAnswerChange(e.target.value)}
+             placeholder={question.placeholder}
+             rows={4}
+           />
 
             {question.isAdaptive && suggestedAnswers.length > 0 && (
               <div className="space-y-2">
@@ -205,17 +289,17 @@ export default function SocialNetworkQuestionnaire() {
                   {suggestedAnswers.map((suggestion, index) => (
                     <Badge
                       key={index}
-                      variant="outline"
+                     variant="outline"
                       className="cursor-pointer hover:bg-secondary"
-                      onClick={() => useSuggestedAnswer(suggestion)}
-                    >
+                      onClick={() => setSelectedSuggestion(suggestion)}
+                   >
                       {suggestion}
-                    </Badge>
+                   </Badge>
                   ))}
-                </div>
+               </div>
               </div>
             )}
-          </div>
+         </div>
         )
       case "radio":
         return (
@@ -226,7 +310,7 @@ export default function SocialNetworkQuestionnaire() {
                 <Label htmlFor={option}>{option}</Label>
               </div>
             ))}
-          </RadioGroup>
+         </RadioGroup>
         )
       case "info":
         return (
@@ -238,9 +322,8 @@ export default function SocialNetworkQuestionnaire() {
       default:
         return null
     }
-  }
-
-  const progress = ((currentQuestion + 1) / questions.length) * 100
+ }
+ const progress = ((currentQuestion + 1) / questions.length) * 100
 
   return (
     <div className="space-y-6">
@@ -249,7 +332,7 @@ export default function SocialNetworkQuestionnaire() {
           <div>
             <span className="text-xs font-semibold inline-block text-primary">
               Question {currentQuestion + 1} of {questions.length}
-            </span>
+           </span>
           </div>
           <div className="text-right">
             <span className="text-xs font-semibold inline-block text-primary">{Math.round(progress)}%</span>
@@ -258,7 +341,7 @@ export default function SocialNetworkQuestionnaire() {
         <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-secondary">
           <div
             style={{ width: `${progress}%` }}
-            className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
+           className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
           ></div>
         </div>
       </div>
@@ -270,55 +353,151 @@ export default function SocialNetworkQuestionnaire() {
             AI-generated follow-up
           </Badge>
         )}
-
-        <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
-
-        {isGeneratingQuestion ? (
-          <div className="space-y-3">
-            <Skeleton className="h-[20px] w-full" />
-            <Skeleton className="h-[20px] w-[80%]" />
-            <Skeleton className="h-[20px] w-[60%]" />
-            <p className="text-sm text-muted-foreground mt-2">Generating personalized follow-up question...</p>
-          </div>
-        ) : (
-          renderQuestionInput()
-        )}
+       <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
       </Card>
-
-      <div className="flex justify-between">
-        <Button onClick={handlePrevious} disabled={currentQuestion === 0} variant="outline">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Previous
-        </Button>
-
-        <div className="flex gap-2">
-          <Button onClick={handleSave} variant="outline">
-            <Save className="mr-2 h-4 w-4" />
-            Save Progress
-          </Button>
-
-          {currentQuestion < questions.length - 1 ? (
-            <Button onClick={handleNext}>
-              Next
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              onClick={generateAdaptiveQuestion}
-              disabled={isGeneratingQuestion || questions[currentQuestion].type === "info"}
-            >
-              {isGeneratingQuestion ? (
-                <>Generating...</>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Follow-up
-                </>
-              )}
-            </Button>
-          )}
+    </div>
+  );
+}
+return (
+  <div className="space-y-6">
+    <div className="relative pt-1">
+      <div className="flex mb-2 items-center justify-between">
+        <div>
+          <span className="text-xs font-semibold inline-block text-primary">
+            Question {currentQuestion + 1} of {questions.length}
+         </span>
+        </div>
+        <div className="text-right">
+          <span className="text-xs font-semibold inline-block text-primary">{Math.round(progress)}%</span>
         </div>
       </div>
+      <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-secondary">
+        <div
+          style={{ width: `${progress}%` }}
+         className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
+        ></div>
+      </div>
     </div>
-  )
+
+    <Card className="p-6">
+      {questions[currentQuestion].isAdaptive && (
+        <Badge className="mb-2" variant="secondary">
+          <Sparkles className="h-3 w-3 mr-1" />
+          AI-generated follow-up
+        </Badge>
+      )}
+     <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
+
+      {isGeneratingQuestion ? (
+        <div className="space-y-3">
+          <Skeleton className="h-[20px] w-full" />
+          <Skeleton className="h-[20px] w-[80%]" />
+          <Skeleton className="h-[20px] w-[60%]" />
+          <p className="text-sm text-muted-foreground mt-2">Generating personalized follow-up question...</p>
+        </div>
+      ) : (
+        renderQuestionInput()
+      )}
+   </Card>
+
+    <div className="flex justify-between">
+      <Button onClick={handlePrevious} disabled={currentQuestion === 0} variant="outline">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Previous
+      </Button>
+
+      <div className="flex gap-2">
+        {isGeneratingQuestion ? (
+          <>Generating...</>
+        ) : (
+          <>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Generate Follow-up
+          </>
+        )}
+       <Button
+          onClick={generateAdaptiveQuestion}
+         disabled={isGeneratingQuestion || questions[currentQuestion].type === "info"}
+       >
+          {isGeneratingQuestion ? (
+            <>Generating...</>
+          ) : (
+            <>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate Follow-up
+            </>
+          )}
+       </Button>
+      </div>
+    </div>
+
+    <ul className="space-y-2">
+      {partners.map((p, idx) => (
+        <li key={p.id} className="border rounded p-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div>
+            <strong>{p.name}</strong> ({p.role || "-"}) — Circle {p.circle || "-"}, {p.communicationFrequency || "-"}
+           <br />Style: {p.communicationStyle || "-"}
+           <br />Topics: {p.commonTopics?.join(", ") || "-"}
+           <br />Notes: {p.notes || "-"}
+         </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => {
+              // Edit: load partner into answers and resume Q&A
+              setAnswers({
+                2: p.name || "",
+                3: p.role || "",
+                4: p.circle?.toString() || "",
+                5: p.communicationFrequency?.charAt(0).toUpperCase() + p.communicationFrequency?.slice(1) || "",
+                6: p.communicationStyle || "",
+                7: p.commonTopics?.join(", ") || "",
+                8: p.notes || "",
+              });
+              setCurrentQuestion(1);
+              setIsReviewing(false);
+              // Remove partner temporarily; will be re-added on save
+              setPartners(prev => prev.filter((_, i) => i !== idx));
+            }}>Edit</Button>
+            <Button size="sm" variant="destructive" onClick={async () => {
+              // Delete: remove and persist
+              const updated = partners.filter((_, i) => i !== idx);
+              setPartners(updated);
+              try {
+                const { writeEncryptedJson } = await import("@/lib/secureJsonStore");
+                await writeEncryptedJson("partners.json", updated);
+                toast({ title: "Partner deleted", description: `${p.name} was removed.` });
+              } catch {
+                toast({ title: "Delete error", description: "Could not delete partner.", variant: "destructive" });
+              }
+           }}>Delete</Button>
+          </div>
+        </li>
+      ))}
+   </ul>
+    <div className="flex gap-4 mt-6">
+      <Button onClick={() => { setIsReviewing(false); }}>
+        Add Another Partner
+      </Button>
+      <Button
+        variant="outline"
+        onClick={async () => {
+          try {
+            const { writeEncryptedJson } = await import("@/lib/secureJsonStore");
+            await writeEncryptedJson("partners.json", partners);
+            toast({
+              title: "Partners saved",
+              description: "All partners have been securely saved.",
+            });
+          } catch (err) {
+            toast({
+              title: "Save error",
+              description: "Failed to save partners. Please try again.",
+              variant: "destructive",
+            });
+          }
+       }}
+     >
+        Finish & Save All
+      </Button>
+    </div>
+  );
 }

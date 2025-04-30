@@ -1,9 +1,56 @@
 import type { Person, Place, Topic } from "./types"
 
-// This would be replaced with actual database calls in a real application
-let people: Person[] = []
-let places: Place[] = []
-let topics: Topic[] = []
+// All CRUD operations now use local JSON API endpoints for privacy-first, persistent storage.
+
+const apiBase = "/api";
+
+export async function addPerson(person: Omit<Person, "id">): Promise<Person> {
+  const res = await fetch(`${apiBase}/people`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(person),
+  });
+  if (!res.ok) throw new Error("Failed to add person");
+  return res.json();
+}
+
+export async function addPlace(place: Omit<Place, "id">): Promise<Place> {
+  const res = await fetch(`${apiBase}/places`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(place),
+  });
+  if (!res.ok) throw new Error("Failed to add place");
+  return res.json();
+}
+
+export async function addTopic(topic: Omit<Topic, "id">): Promise<Topic> {
+  const res = await fetch(`${apiBase}/topics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(topic),
+  });
+  if (!res.ok) throw new Error("Failed to add topic");
+  return res.json();
+}
+
+export async function getPeople(): Promise<Person[]> {
+  const res = await fetch(`${apiBase}/people`);
+  if (!res.ok) throw new Error("Failed to fetch people");
+  return res.json();
+}
+
+export async function getPlaces(): Promise<Place[]> {
+  const res = await fetch(`${apiBase}/places`);
+  if (!res.ok) throw new Error("Failed to fetch places");
+  return res.json();
+}
+
+export async function getTopics(): Promise<Topic[]> {
+  const res = await fetch(`${apiBase}/topics`);
+  if (!res.ok) throw new Error("Failed to fetch topics");
+  return res.json();
+}
 
 export function addPerson(person: Omit<Person, "id">): Person {
   const newPerson = {
