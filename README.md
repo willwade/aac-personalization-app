@@ -27,10 +27,31 @@ This project is an open-source prototype designed to enhance communication for i
    pnpm dev
    # or
    npm run dev
+   # or
+   yarn dev
    ```
    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+   **Note:** Do NOT use `npx run dev` — this will not start the app. Always use your package manager's script runner as above.
+
 3. **Explore the App:**
+
+---
+
+## Environment Variables
+
+Some features require environment variables. Create a `.env.local` file in the project root and add any required keys. Example:
+
+```env
+# Example environment variables
+OPENAI_API_KEY=your-openai-api-key-here
+WHISPER_API_KEY=your-whisper-api-key-here
+# Add any other required variables below
+```
+
+- If you are missing a required variable, the app may fail to start or certain features may not work.
+- Check the `.envrc` file or the `/app/api` code for any additional required variables.
+
    - Start with the Social Networks section to build a user’s social graph.
    - Generate a Communication Passport.
    - Log and analyze conversations (demo/sample data).

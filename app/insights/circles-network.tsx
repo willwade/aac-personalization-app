@@ -12,14 +12,15 @@ const examplePartners: CommunicationPartner[] = [
   { id: "6", name: "Shopkeeper", relationship: "shopkeeper", circle: 5 },
 ];
 
+import { loadData } from "@/lib/clientDb";
+
 export default function CirclesAndNetworkPage() {
   const [partners, setPartners] = useState<CommunicationPartner[]>(examplePartners);
 
   useEffect(() => {
     (async () => {
       try {
-        const { readEncryptedJson } = await import("@/lib/secureJsonStore");
-        const loaded = await readEncryptedJson<CommunicationPartner[]>("partners.json");
+        const loaded = await loadData<CommunicationPartner[]>("aac-partners");
         if (loaded && Array.isArray(loaded) && loaded.length > 0) {
           setPartners(loaded);
         }
@@ -34,8 +35,7 @@ export default function CirclesAndNetworkPage() {
 
   async function refreshPartners() {
     try {
-      const { readEncryptedJson } = await import("@/lib/secureJsonStore");
-      const loaded = await readEncryptedJson<CommunicationPartner[]>("partners.json");
+      const loaded = await loadData<CommunicationPartner[]>("aac-partners");
       if (loaded && Array.isArray(loaded) && loaded.length > 0) {
         setPartners(loaded);
         setToastMsg("Refreshed partners from storage!");

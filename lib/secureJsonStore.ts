@@ -1,3 +1,5 @@
+// WARNING: This file uses Node.js modules and can ONLY be used in server-side code (API routes, server actions, or scripts).
+// Do NOT import this file from React components or any code that runs on the client.
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';

@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { ArrowRight, ArrowLeft, Save, Sparkles } from "lucide-react"
+import { ArrowLeft, Sparkles } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { saveData, loadData } from "@/lib/clientDb"
 
 type QuestionType = {
   id: number
@@ -140,6 +141,25 @@ export default function SocialNetworkQuestionnaire() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [partners, setPartners] = useState<Person[]>([]);
+
+  // Load saved answers and partners on mount
+  useEffect(() => {
+    (async () => {
+      const savedAnswers = await loadData<Record<number, string>>("aac-answers");
+      if (savedAnswers) setAnswers(savedAnswers);
+      const savedPartners = await loadData<Person[]>("aac-partners");
+      if (savedPartners) setPartners(savedPartners);
+    })();
+  }, []);
+
+  // Auto-save answers when they change
+  useEffect(() => {
+    saveData("aac-answers", answers);
+  }, [answers]);
+  // Auto-save partners when they change
+  useEffect(() => {
+    saveData("aac-partners", partners);
+  }, [partners]);
   const [isReviewing, setIsReviewing] = useState(false);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
   const [suggestedAnswers, setSuggestedAnswers] = useState<string[]>([]);
@@ -165,45 +185,15 @@ export default function SocialNetworkQuestionnaire() {
       })
       setSelectedSuggestion(null) // Reset after applying
     }
- }, [selectedSuggestion, toast, handleAnswerChange])
-
-  const handleNext = async () => {
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    } else {
-      // All questions for a partner answered; group into Person and add to partners
-      const person: Person = {
-        id: Math.random().toString(36).substring(2, 10),
-        name: answers[2] || "",
-        role: answers[3] || "",
-        circle: answers[4] ? (parseInt(answers[4][0], 10) as 1|2|3|4|5) : undefined,
-        communicationFrequency: (answers[5]?.toLowerCase() as "daily"|"weekly"|"monthly"|"rarely") || undefined,
-        communicationStyle: answers[6] || undefined,
-        commonTopics: answers[7] ? answers[7].split(",").map(t => t.trim()).filter(Boolean) : undefined,
-        notes: answers[8] || undefined,
-        relationship: answers[3] || "",
-      };
-      setPartners(prev => [...prev, person]);
-      setAnswers({});
-      setCurrentQuestion(1); // Restart at first partner question (skip intro)
-      setIsReviewing(true); // Show review after each partner
-    }
- };
+  }, [selectedSuggestion, toast, handleAnswerChange])
 
   const handlePrevious = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion(currentQuestion - 1)
     }
- }
- const handleSave = () => {
-    // In a real app, this would save to a database
-    console.log("Saving answers:", answers)
-    toast({
-      title: "Questionnaire saved",
-      description: "Your social network information has been saved successfully.",
-    })
   }
- const generateAdaptiveQuestion = async () => {
+
+  const generateAdaptiveQuestion = async () => {
     try {
       setIsGeneratingQuestion(true)
 
@@ -228,7 +218,7 @@ export default function SocialNetworkQuestionnaire() {
       if (!response.ok) {
         throw new Error("Failed to generate adaptive question")
       }
-     const data = await response.json()
+    const data = await response.json()
 
       // Add the new adaptive question
       const newQuestion: QuestionType = {
@@ -238,7 +228,7 @@ export default function SocialNetworkQuestionnaire() {
         placeholder: "Your answer here...",
         isAdaptive: true,
       }
-     setQuestions([...questions, newQuestion])
+    setQuestions([...questions, newQuestion])
       setSuggestedAnswers(data.suggestedAnswers || [])
       setCurrentQuestion(questions.length) // Move to the new question
 
@@ -256,11 +246,9 @@ export default function SocialNetworkQuestionnaire() {
     } finally {
       setIsGeneratingQuestion(false)
     }
- }
- const useSuggestedAnswer = (answer: string) => {
-    setSelectedSuggestion(answer)
   }
- const renderQuestionInput = () => {
+
+  const renderQuestionInput = () => {
     const question = questions[currentQuestion]
 
     switch (question.type) {
@@ -268,19 +256,19 @@ export default function SocialNetworkQuestionnaire() {
         return (
           <Input
             value={answers[question.id] || ""}
-           onChange={(e) => handleAnswerChange(e.target.value)}
-           placeholder={question.placeholder}
-         />
+          onChange={(e) => handleAnswerChange(e.target.value)}
+          placeholder={question.placeholder}
+        />
         )
       case "textarea":
         return (
           <div className="space-y-4">
             <Textarea
               value={answers[question.id] || ""}
-             onChange={(e) => handleAnswerChange(e.target.value)}
-             placeholder={question.placeholder}
-             rows={4}
-           />
+            onChange={(e) => handleAnswerChange(e.target.value)}
+            placeholder={question.placeholder}
+            rows={4}
+          />
 
             {question.isAdaptive && suggestedAnswers.length > 0 && (
               <div className="space-y-2">
@@ -289,17 +277,17 @@ export default function SocialNetworkQuestionnaire() {
                   {suggestedAnswers.map((suggestion, index) => (
                     <Badge
                       key={index}
-                     variant="outline"
+                    variant="outline"
                       className="cursor-pointer hover:bg-secondary"
                       onClick={() => setSelectedSuggestion(suggestion)}
-                   >
+                  >
                       {suggestion}
-                   </Badge>
+                  </Badge>
                   ))}
-               </div>
+              </div>
               </div>
             )}
-         </div>
+        </div>
         )
       case "radio":
         return (
@@ -310,7 +298,7 @@ export default function SocialNetworkQuestionnaire() {
                 <Label htmlFor={option}>{option}</Label>
               </div>
             ))}
-         </RadioGroup>
+        </RadioGroup>
         )
       case "info":
         return (
@@ -322,9 +310,10 @@ export default function SocialNetworkQuestionnaire() {
       default:
         return null
     }
- }
- const progress = ((currentQuestion + 1) / questions.length) * 100
+}
+const progress = ((currentQuestion + 1) / questions.length) * 100
 
+if (isReviewing) {
   return (
     <div className="space-y-6">
       <div className="relative pt-1">
@@ -332,7 +321,7 @@ export default function SocialNetworkQuestionnaire() {
           <div>
             <span className="text-xs font-semibold inline-block text-primary">
               Question {currentQuestion + 1} of {questions.length}
-           </span>
+            </span>
           </div>
           <div className="text-right">
             <span className="text-xs font-semibold inline-block text-primary">{Math.round(progress)}%</span>
@@ -341,11 +330,10 @@ export default function SocialNetworkQuestionnaire() {
         <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-secondary">
           <div
             style={{ width: `${progress}%` }}
-           className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
+            className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
           ></div>
         </div>
       </div>
-
       <Card className="p-6">
         {questions[currentQuestion].isAdaptive && (
           <Badge className="mb-2" variant="secondary">
@@ -353,11 +341,12 @@ export default function SocialNetworkQuestionnaire() {
             AI-generated follow-up
           </Badge>
         )}
-       <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
+        <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
       </Card>
     </div>
   );
 }
+
 return (
   <div className="space-y-6">
     <div className="relative pt-1">
@@ -365,7 +354,7 @@ return (
         <div>
           <span className="text-xs font-semibold inline-block text-primary">
             Question {currentQuestion + 1} of {questions.length}
-         </span>
+        </span>
         </div>
         <div className="text-right">
           <span className="text-xs font-semibold inline-block text-primary">{Math.round(progress)}%</span>
@@ -374,7 +363,7 @@ return (
       <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-secondary">
         <div
           style={{ width: `${progress}%` }}
-         className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
+        className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-300"
         ></div>
       </div>
     </div>
@@ -386,7 +375,7 @@ return (
           AI-generated follow-up
         </Badge>
       )}
-     <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
+    <h3 className="text-lg font-medium mb-4">{questions[currentQuestion].question}</h3>
 
       {isGeneratingQuestion ? (
         <div className="space-y-3">
@@ -398,7 +387,7 @@ return (
       ) : (
         renderQuestionInput()
       )}
-   </Card>
+  </Card>
 
     <div className="flex justify-between">
       <Button onClick={handlePrevious} disabled={currentQuestion === 0} variant="outline">
@@ -415,10 +404,10 @@ return (
             Generate Follow-up
           </>
         )}
-       <Button
+      <Button
           onClick={generateAdaptiveQuestion}
-         disabled={isGeneratingQuestion || questions[currentQuestion].type === "info"}
-       >
+        disabled={isGeneratingQuestion || questions[currentQuestion].type === "info"}
+      >
           {isGeneratingQuestion ? (
             <>Generating...</>
           ) : (
@@ -427,7 +416,7 @@ return (
               Generate Follow-up
             </>
           )}
-       </Button>
+      </Button>
       </div>
     </div>
 
@@ -436,10 +425,10 @@ return (
         <li key={p.id} className="border rounded p-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div>
             <strong>{p.name}</strong> ({p.role || "-"}) — Circle {p.circle || "-"}, {p.communicationFrequency || "-"}
-           <br />Style: {p.communicationStyle || "-"}
-           <br />Topics: {p.commonTopics?.join(", ") || "-"}
-           <br />Notes: {p.notes || "-"}
-         </div>
+          <br />Style: {p.communicationStyle || "-"}
+          <br />Topics: {p.commonTopics?.join(", ") || "-"}
+          <br />Notes: {p.notes || "-"}
+        </div>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={() => {
               // Edit: load partner into answers and resume Q&A
@@ -462,17 +451,16 @@ return (
               const updated = partners.filter((_, i) => i !== idx);
               setPartners(updated);
               try {
-                const { writeEncryptedJson } = await import("@/lib/secureJsonStore");
-                await writeEncryptedJson("partners.json", updated);
+                await saveData("aac-partners", updated);
                 toast({ title: "Partner deleted", description: `${p.name} was removed.` });
               } catch {
                 toast({ title: "Delete error", description: "Could not delete partner.", variant: "destructive" });
               }
-           }}>Delete</Button>
+          }}>Delete</Button>
           </div>
         </li>
       ))}
-   </ul>
+  </ul>
     <div className="flex gap-4 mt-6">
       <Button onClick={() => { setIsReviewing(false); }}>
         Add Another Partner
@@ -481,23 +469,23 @@ return (
         variant="outline"
         onClick={async () => {
           try {
-            const { writeEncryptedJson } = await import("@/lib/secureJsonStore");
-            await writeEncryptedJson("partners.json", partners);
+            await saveData("aac-partners", partners);
             toast({
               title: "Partners saved",
               description: "All partners have been securely saved.",
             });
-          } catch (err) {
+          } catch {
             toast({
               title: "Save error",
               description: "Failed to save partners. Please try again.",
               variant: "destructive",
             });
           }
-       }}
-     >
+        }}
+      >
         Finish & Save All
       </Button>
     </div>
-  );
+  </div>
+);
 }
