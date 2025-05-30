@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { ArrowLeft, Sparkles } from "lucide-react"
+import { ArrowLeft, Sparkles, Clock, CheckCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { saveData, loadData } from "@/lib/clientDb"
+import VoiceInput from "@/components/VoiceInput"
 
 type QuestionType = {
   id: number
@@ -135,6 +136,7 @@ const initialQuestions: QuestionType[] = [
 ];
 
 import { Person } from "@/lib/types";
+import PersonForm from "@/components/PersonForm";
 
 export default function SocialNetworkQuestionnaire() {
   const [questions, setQuestions] = useState<QuestionType[]>(initialQuestions);
@@ -152,6 +154,22 @@ export default function SocialNetworkQuestionnaire() {
     })();
   }, []);
 
+  // Load available people from the people database
+  useEffect(() => {
+    const loadPeople = async () => {
+      try {
+        const response = await fetch("/api/people");
+        if (response.ok) {
+          const people = await response.json();
+          setAvailablePeople(people);
+        }
+      } catch (error) {
+        console.error("Error loading people:", error);
+      }
+    };
+    loadPeople();
+  }, []);
+
   // Auto-save answers when they change
   useEffect(() => {
     saveData("aac-answers", answers);
@@ -163,8 +181,76 @@ export default function SocialNetworkQuestionnaire() {
   const [isReviewing, setIsReviewing] = useState(false);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
   const [suggestedAnswers, setSuggestedAnswers] = useState<string[]>([]);
+  const [showPersonSelection, setShowPersonSelection] = useState(false);
+  const [showPersonForm, setShowPersonForm] = useState(false);
+  const [availablePeople, setAvailablePeople] = useState<Person[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const { toast } = useToast();
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+
+  // Handler for selecting an existing person
+  const handlePersonSelect = (person: Person) => {
+    setSelectedPerson(person);
+    setShowPersonSelection(false);
+    // Start adaptive questions for this person
+    startAdaptiveQuestionsForPerson(person);
+  };
+
+  // Handler for creating a new person
+  const handlePersonSave = async (personData: Omit<Person, "id">) => {
+    try {
+      const newPerson = {
+        ...personData,
+        id: Date.now().toString(),
+      };
+
+      const response = await fetch("/api/people", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newPerson),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save person");
+      }
+
+      // Add to available people and select
+      setAvailablePeople(prev => [...prev, newPerson]);
+      setSelectedPerson(newPerson);
+      setShowPersonForm(false);
+
+      toast({
+        title: "Person added successfully",
+        description: `${personData.name} has been added to your network.`,
+      });
+
+      // Start adaptive questions for this person
+      startAdaptiveQuestionsForPerson(newPerson);
+    } catch (error) {
+      console.error("Error saving person:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save person. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Start adaptive questions for a specific person
+  const startAdaptiveQuestionsForPerson = (person: Person) => {
+    // Reset to start of questionnaire but with person context
+    setCurrentQuestion(0);
+    setIsReviewing(false);
+    // Clear previous answers to start fresh for this person
+    setAnswers({});
+
+    toast({
+      title: "Starting adaptive questions",
+      description: `Now generating personalized questions for ${person.name}.`,
+    });
+  };
 
   const handleAnswerChange = useCallback(
     (value: string) => {
@@ -212,6 +298,7 @@ export default function SocialNetworkQuestionnaire() {
           previousQuestions,
           previousAnswers,
           currentQuestion: currentQuestionText,
+          selectedPerson: selectedPerson, // Include person context
         }),
       })
 
@@ -220,10 +307,19 @@ export default function SocialNetworkQuestionnaire() {
       }
     const data = await response.json()
 
+      // Check if questionnaire is complete
+      if (data.isComplete) {
+        toast({
+          title: "Questionnaire Complete!",
+          description: "You've provided enough information for personalized vocabulary recommendations.",
+        });
+        return;
+      }
+
       // Add the new adaptive question
       const newQuestion: QuestionType = {
         id: questions.length + 1,
-        question: data.followUpQuestion,
+        question: `[ADAPTIVE] ${data.followUpQuestion}`,
         type: "textarea",
         placeholder: "Your answer here...",
         isAdaptive: true,
@@ -266,12 +362,24 @@ export default function SocialNetworkQuestionnaire() {
       case "textarea":
         return (
           <div className="space-y-4">
-            <Textarea
-              value={answers[question.id] || ""}
-            onChange={(e) => handleAnswerChange(e.target.value)}
-            placeholder={question.placeholder}
-            rows={4}
-          />
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Textarea
+                  value={answers[question.id] || ""}
+                  onChange={(e) => handleAnswerChange(e.target.value)}
+                  placeholder={question.placeholder}
+                  rows={4}
+                />
+              </div>
+              <VoiceInput
+                onTranscript={(text) => {
+                  const currentValue = answers[question.id] || "";
+                  const newValue = currentValue ? `${currentValue} ${text}` : text;
+                  handleAnswerChange(newValue);
+                }}
+                disabled={isGeneratingQuestion}
+              />
+            </div>
 
             {question.isAdaptive && suggestedAnswers.length > 0 && (
               <div className="space-y-2">
@@ -280,17 +388,17 @@ export default function SocialNetworkQuestionnaire() {
                   {suggestedAnswers.map((suggestion, index) => (
                     <Badge
                       key={index}
-                    variant="outline"
+                      variant="outline"
                       className="cursor-pointer hover:bg-secondary"
                       onClick={() => setSelectedSuggestion(suggestion)}
-                  >
+                    >
                       {suggestion}
-                  </Badge>
+                    </Badge>
                   ))}
-              </div>
+                </div>
               </div>
             )}
-        </div>
+          </div>
         )
       case "radio":
         return (
@@ -398,19 +506,11 @@ return (
         Previous
       </Button>
 
-      <div className="flex gap-2">
-        {isGeneratingQuestion ? (
-          <>Generating...</>
-        ) : (
-          <>
-            <Sparkles className="mr-2 h-4 w-4" />
-            Generate Follow-up
-          </>
-        )}
-      <Button
+      <div className="flex gap-2 items-center">
+        <Button
           onClick={generateAdaptiveQuestion}
-        disabled={isGeneratingQuestion || questions[currentQuestion].type === "info"}
-      >
+          disabled={isGeneratingQuestion || questions[currentQuestion].type === "info"}
+        >
           {isGeneratingQuestion ? (
             <>Generating...</>
           ) : (
@@ -419,7 +519,26 @@ return (
               Generate Follow-up
             </>
           )}
-      </Button>
+        </Button>
+
+        {/* Adaptive question counter */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {questions.filter(q => q.isAdaptive).length >= 8 ? (
+            <>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span className="text-green-600 font-medium">
+                Adaptive questions complete!
+              </span>
+            </>
+          ) : (
+            <>
+              <Clock className="h-4 w-4" />
+              <span>
+                {questions.filter(q => q.isAdaptive).length}/8 adaptive questions
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
 
@@ -439,7 +558,7 @@ return (
                 2: p.name || "",
                 3: p.role || "",
                 4: p.circle?.toString() || "",
-                5: p.communicationFrequency?.charAt(0).toUpperCase() + p.communicationFrequency?.slice(1) || "",
+                5: p.communicationFrequency ? p.communicationFrequency.charAt(0).toUpperCase() + p.communicationFrequency.slice(1) : "",
                 6: p.communicationStyle || "",
                 7: p.commonTopics?.join(", ") || "",
                 8: p.notes || "",
@@ -465,8 +584,8 @@ return (
       ))}
   </ul>
     <div className="flex gap-4 mt-6">
-      <Button onClick={() => { setIsReviewing(false); }}>
-        Add Another Partner
+      <Button onClick={() => { setShowPersonSelection(true); }}>
+        Add Communication Partner
       </Button>
       <Button
         variant="outline"
@@ -489,6 +608,73 @@ return (
         Finish & Save All
       </Button>
     </div>
+
+    {/* Person Selection Modal */}
+    {showPersonSelection && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <h3 className="text-lg font-semibold mb-4">Select Communication Partner</h3>
+
+          <div className="space-y-4">
+            {availablePeople.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-2">Choose from existing people:</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {availablePeople.map((person) => (
+                    <div
+                      key={person.id}
+                      className="p-3 border rounded cursor-pointer hover:bg-gray-50"
+                      onClick={() => handlePersonSelect(person)}
+                    >
+                      <div className="font-medium">{person.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {person.role} • Circle {person.circle}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <Button
+                onClick={() => {
+                  setShowPersonSelection(false);
+                  setShowPersonForm(true);
+                }}
+                className="w-full"
+              >
+                Create New Person
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowPersonSelection(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Person Form Modal */}
+    {showPersonForm && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <h3 className="text-lg font-semibold mb-4">Add New Communication Partner</h3>
+
+          <PersonForm
+            onSave={handlePersonSave}
+            onCancel={() => setShowPersonForm(false)}
+          />
+        </div>
+      </div>
+    )}
   </div>
 );
 }

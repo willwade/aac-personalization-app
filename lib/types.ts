@@ -18,9 +18,18 @@ export type Place = {
   id: string
   name: string
   type: string
-  frequency: "daily" | "weekly" | "monthly" | "rarely"
-  communicationPartners: string[] // IDs of people
-  notes: string
+  address?: string
+  description?: string
+  accessibilityFeatures?: string[]
+  communicationNotes?: string
+  frequencyOfVisit?: "daily" | "weekly" | "monthly" | "occasionally" | "rarely"
+  communicationPartners?: string[] // IDs of people
+  notes?: string
+  // GPS coordinates
+  latitude?: number
+  longitude?: number
+  locationAccuracy?: number
+  locationTimestamp?: number
 }
 
 export type Topic = {

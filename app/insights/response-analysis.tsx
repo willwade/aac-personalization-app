@@ -20,31 +20,59 @@ const sampleResponses = {
 }
 
 type AnalysisResult = {
-  communicationPartners: {
-    family: string[]
-    professionals: string[]
-    peers: string[]
+  personalProfile: {
+    name: string
+    interests: string[]
+    preferences: string[]
   }
-  communicationContexts: string[]
-  topicsOfInterest: string[]
-  communicationPatterns: string[]
-  strengths: string[]
-  challenges: string[]
-  recommendations: string[]
+  knowledgeGraph: {
+    entities: Array<{
+      type: string
+      name: string
+      relationship: string
+      context: string
+    }>
+    relationships: Array<{
+      from: string
+      to: string
+      type: string
+      frequency?: string
+    }>
+  }
+  communicationContext: {
+    primaryEnvironments: string[]
+    communicationMethods: string[]
+    socialCircles: string[]
+  }
+  knowledgeGaps: string[]
+  passportContent: {
+    greeting: string
+    aboutMe: string
+    communicationTips: string
+  }
 }
 
 const initialAnalysisState: AnalysisResult = {
-  communicationPartners: {
-    family: [],
-    professionals: [],
-    peers: [],
+  personalProfile: {
+    name: "",
+    interests: [],
+    preferences: [],
   },
-  communicationContexts: [],
-  topicsOfInterest: [],
-  communicationPatterns: [],
-  strengths: [],
-  challenges: [],
-  recommendations: [],
+  knowledgeGraph: {
+    entities: [],
+    relationships: [],
+  },
+  communicationContext: {
+    primaryEnvironments: [],
+    communicationMethods: [],
+    socialCircles: [],
+  },
+  knowledgeGaps: [],
+  passportContent: {
+    greeting: "",
+    aboutMe: "",
+    communicationTips: "",
+  },
 }
 
 export default function ResponseAnalysis() {
@@ -57,15 +85,28 @@ export default function ResponseAnalysis() {
     setIsAnalyzing(true)
 
     try {
-      // In a real app, you would get the actual responses from your database
-      const responses = sampleResponses
+      // Get actual questionnaire responses from IndexedDB
+      const { loadData } = await import("@/lib/clientDb");
+      const actualResponses = await loadData<Record<number, string>>("aac-answers");
+      const actualPartners = await loadData<Person[]>("aac-partners");
+
+      // Use actual data if available, otherwise fall back to sample data
+      const responses = actualResponses && Object.keys(actualResponses).length > 0
+        ? actualResponses
+        : sampleResponses;
+
+      // Include partner data in the analysis
+      const requestData = {
+        responses,
+        partners: actualPartners || []
+      };
 
       const response = await fetch("/api/analyze-responses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ responses }),
+        body: JSON.stringify(requestData),
       })
 
       if (!response.ok) {
@@ -100,50 +141,103 @@ export default function ResponseAnalysis() {
     }
   }, [hasAnalyzed])
 
-  const renderPartnerSection = () => {
-    const { family, professionals, peers } = analysis.communicationPartners
-    const hasPartners = family.length > 0 || professionals.length > 0 || peers.length > 0
+  const renderPersonalProfile = () => {
+    const { name, interests, preferences } = analysis.personalProfile
 
-    if (!hasPartners) {
-      return <p className="text-muted-foreground">No communication partners identified.</p>
+    if (!name && interests.length === 0 && preferences.length === 0) {
+      return <p className="text-muted-foreground">No personal profile information available.</p>
     }
 
     return (
       <div className="space-y-4">
-        {family.length > 0 && (
+        {name && (
           <div>
-            <h4 className="font-medium mb-2">Family</h4>
+            <h4 className="font-medium mb-2">Name</h4>
+            <Badge variant="outline" className="text-lg px-3 py-1">{name}</Badge>
+          </div>
+        )}
+
+        {interests.length > 0 && (
+          <div>
+            <h4 className="font-medium mb-2">Interests</h4>
             <div className="flex flex-wrap gap-2">
-              {family.map((member, index) => (
-                <Badge key={index} variant="outline">
-                  {member}
+              {interests.map((interest, index) => (
+                <Badge key={index} variant="outline" className="bg-blue-50">
+                  {interest}
                 </Badge>
               ))}
             </div>
           </div>
         )}
 
-        {professionals.length > 0 && (
+        {preferences.length > 0 && (
           <div>
-            <h4 className="font-medium mb-2">Professionals</h4>
+            <h4 className="font-medium mb-2">Communication Preferences</h4>
             <div className="flex flex-wrap gap-2">
-              {professionals.map((professional, index) => (
-                <Badge key={index} variant="outline">
-                  {professional}
+              {preferences.map((preference, index) => (
+                <Badge key={index} variant="outline" className="bg-green-50">
+                  {preference}
                 </Badge>
               ))}
             </div>
           </div>
         )}
+      </div>
+    )
+  }
 
-        {peers.length > 0 && (
+  const renderKnowledgeGraph = () => {
+    const { entities, relationships } = analysis.knowledgeGraph
+
+    if (entities.length === 0 && relationships.length === 0) {
+      return <p className="text-muted-foreground">No knowledge graph data available.</p>
+    }
+
+    return (
+      <div className="space-y-4">
+        {entities.length > 0 && (
           <div>
-            <h4 className="font-medium mb-2">Peers</h4>
-            <div className="flex flex-wrap gap-2">
-              {peers.map((peer, index) => (
-                <Badge key={index} variant="outline">
-                  {peer}
-                </Badge>
+            <h4 className="font-medium mb-2">Entities</h4>
+            <div className="space-y-2">
+              {entities.map((entity, index) => (
+                <div key={index} className="border rounded p-3 bg-gray-50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="secondary" className="text-xs">{entity.type}</Badge>
+                    <span className="font-medium">{entity.name}</span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Relationship:</span> {entity.relationship}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Context:</span> {entity.context}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {relationships.length > 0 && (
+          <div>
+            <h4 className="font-medium mb-2">Relationships</h4>
+            <div className="space-y-2">
+              {relationships.map((rel, index) => (
+                <div key={index} className="border rounded p-3 bg-blue-50">
+                  <div className="text-sm">
+                    <span className="font-medium">{rel.from}</span>
+                    <span className="mx-2 text-gray-500">→</span>
+                    <span className="font-medium">{rel.to}</span>
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    <span className="font-medium">Type:</span> {rel.type}
+                    {rel.frequency && (
+                      <>
+                        <span className="mx-2">•</span>
+                        <span className="font-medium">Frequency:</span> {rel.frequency}
+                      </>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -188,8 +282,8 @@ export default function ResponseAnalysis() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Response Analysis</CardTitle>
-              <CardDescription>AI-powered analysis of questionnaire responses</CardDescription>
+              <CardTitle>Knowledge Graph Analysis</CardTitle>
+              <CardDescription>AI-powered knowledge graph building for AAC personalization</CardDescription>
             </div>
             <Button onClick={analyzeResponses} disabled={isAnalyzing} variant="outline" size="sm">
               <Sparkles className="mr-2 h-4 w-4" />
@@ -213,85 +307,100 @@ export default function ResponseAnalysis() {
             </div>
           ) : (
             <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="partners">
+              <AccordionItem value="profile">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center">
                     <Users className="h-5 w-5 mr-2 text-primary" />
-                    <span>Communication Partners</span>
+                    <span>Personal Profile</span>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent>{renderPartnerSection()}</AccordionContent>
+                <AccordionContent>{renderPersonalProfile()}</AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="contexts">
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="flex items-center">
-                    <MapPin className="h-5 w-5 mr-2 text-primary" />
-                    <span>Communication Contexts</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {renderBadgeList(analysis.communicationContexts, "No communication contexts identified.")}
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="topics">
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="flex items-center">
-                    <Lightbulb className="h-5 w-5 mr-2 text-primary" />
-                    <span>Topics of Interest</span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {renderBadgeList(analysis.topicsOfInterest, "No topics of interest identified.")}
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="patterns">
+              <AccordionItem value="knowledge-graph">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center">
                     <Brain className="h-5 w-5 mr-2 text-primary" />
-                    <span>Communication Patterns</span>
+                    <span>Knowledge Graph</span>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent>
-                  {renderListItems(analysis.communicationPatterns, "No communication patterns identified.")}
-                </AccordionContent>
+                <AccordionContent>{renderKnowledgeGraph()}</AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="strengths">
+              <AccordionItem value="context">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center">
-                    <CheckCircle2 className="h-5 w-5 mr-2 text-green-500" />
-                    <span>Communication Strengths</span>
+                    <MapPin className="h-5 w-5 mr-2 text-primary" />
+                    <span>Communication Context</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {renderListItems(analysis.strengths, "No communication strengths identified.")}
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Primary Environments</h4>
+                      {renderBadgeList(analysis.communicationContext.primaryEnvironments, "No environments identified.")}
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Communication Methods</h4>
+                      {renderBadgeList(analysis.communicationContext.communicationMethods, "No methods identified.")}
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Social Circles</h4>
+                      {renderBadgeList(analysis.communicationContext.socialCircles, "No social circles identified.")}
+                    </div>
+                  </div>
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="challenges">
+              <AccordionItem value="gaps">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center">
                     <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
-                    <span>Communication Challenges</span>
+                    <span>Knowledge Gaps</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {renderListItems(analysis.challenges, "No communication challenges identified.")}
+                  {renderListItems(analysis.knowledgeGaps, "No knowledge gaps identified.")}
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="recommendations">
+              <AccordionItem value="passport">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center">
                     <Sparkles className="h-5 w-5 mr-2 text-primary" />
-                    <span>Recommendations</span>
+                    <span>Communication Passport</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  {renderListItems(analysis.recommendations, "No recommendations available.")}
+                  <div className="space-y-4">
+                    {analysis.passportContent.greeting && (
+                      <div>
+                        <h4 className="font-medium mb-2">Greeting</h4>
+                        <p className="text-sm bg-blue-50 p-3 rounded border-l-4 border-blue-200">
+                          {analysis.passportContent.greeting}
+                        </p>
+                      </div>
+                    )}
+                    {analysis.passportContent.aboutMe && (
+                      <div>
+                        <h4 className="font-medium mb-2">About Me</h4>
+                        <p className="text-sm bg-green-50 p-3 rounded border-l-4 border-green-200">
+                          {analysis.passportContent.aboutMe}
+                        </p>
+                      </div>
+                    )}
+                    {analysis.passportContent.communicationTips && (
+                      <div>
+                        <h4 className="font-medium mb-2">Communication Tips</h4>
+                        <p className="text-sm bg-yellow-50 p-3 rounded border-l-4 border-yellow-200">
+                          {analysis.passportContent.communicationTips}
+                        </p>
+                      </div>
+                    )}
+                    {!analysis.passportContent.greeting && !analysis.passportContent.aboutMe && !analysis.passportContent.communicationTips && (
+                      <p className="text-muted-foreground">No passport content available.</p>
+                    )}
+                  </div>
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
@@ -299,8 +408,7 @@ export default function ResponseAnalysis() {
         </CardContent>
         <CardFooter className="text-sm text-muted-foreground">
           <p>
-            This analysis is based on the questionnaire responses and is intended to help personalize the AAC
-            experience.
+            This knowledge graph analysis builds personal context from questionnaire responses to enable better AAC personalization and identify areas where more information would be helpful.
           </p>
         </CardFooter>
       </Card>

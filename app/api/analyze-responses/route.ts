@@ -1,13 +1,59 @@
-import { openai } from "@ai-sdk/openai"
-import { generateText } from "ai"
-import { NextResponse } from "next/server"
+import { NextResponse } from "next/server";
+import { ChatOpenAI } from "@langchain/openai";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const LLM_PROVIDER = process.env.LLM_PROVIDER || "openai"; // "openai" or "gemini"
 
 export async function POST(req: Request) {
   try {
-    const { responses } = await req.json()
+    const { responses, partners } = await req.json()
 
     if (!responses || Object.keys(responses).length === 0) {
       return NextResponse.json({ error: "No responses provided for analysis" }, { status: 400 })
+    }
+
+    // Debug logging
+    console.log("LLM_PROVIDER:", LLM_PROVIDER);
+    console.log("OPENAI_API_KEY exists:", !!OPENAI_API_KEY);
+    console.log("GEMINI_API_KEY exists:", !!GEMINI_API_KEY);
+
+    // Fallback: static analysis for demo
+    if ((LLM_PROVIDER === "openai" && !OPENAI_API_KEY) || (LLM_PROVIDER === "gemini" && !GEMINI_API_KEY)) {
+      console.log("No API key available, using demo fallback");
+      return NextResponse.json({
+        personalProfile: {
+          name: "Demo User",
+          interests: ["Technology", "Music"],
+          preferences: ["Visual communication", "Routine-based interactions"]
+        },
+        knowledgeGraph: {
+          entities: [
+            { type: "person", name: "Family Member", relationship: "family", context: "daily communication" },
+            { type: "place", name: "Home", context: "primary environment" },
+            { type: "topic", name: "Hobbies", context: "personal interests" }
+          ],
+          relationships: [
+            { from: "Demo User", to: "Family Member", type: "communicates_with", frequency: "daily" }
+          ]
+        },
+        communicationContext: {
+          primaryEnvironments: ["Home", "School"],
+          communicationMethods: ["Visual aids", "Gestures"],
+          socialCircles: ["Family", "Caregivers"]
+        },
+        knowledgeGaps: [
+          "Need more details about specific interests",
+          "Communication preferences in different environments",
+          "Preferred topics for conversation starters"
+        ],
+        passportContent: {
+          greeting: "Hello! I enjoy communicating about my interests.",
+          aboutMe: "I prefer visual communication and routine interactions.",
+          communicationTips: "I respond well to clear, simple communication."
+        }
+      }, { status: 200 });
     }
 
     // Format the responses for the AI
@@ -17,121 +63,161 @@ export async function POST(req: Request) {
       })
       .join("\n\n")
 
-    const { text } = await generateText({
-      model: openai("gpt-4o"),
-      prompt: `
-You are an expert in AAC (Augmentative and Alternative Communication) and analyzing communication patterns. 
-Analyze the following questionnaire responses from a caregiver about an AAC user:
+    // Format partner data
+    const formattedPartners = partners && partners.length > 0
+      ? partners.map(p => `${p.name} (${p.role}) - Circle ${p.circle}, ${p.communicationFrequency || 'frequency unknown'}, Topics: ${p.commonTopics?.join(', ') || 'none specified'}`).join('\n')
+      : "No detailed partner information available";
 
+    const prompt = `You are an expert in building knowledge graphs for AAC (Augmentative and Alternative Communication) personalization.
+
+Your goal is to analyze questionnaire responses and communication partner data to build a comprehensive knowledge graph that will enable better AAC personalization. Focus on extracting personal context, relationships, and identifying knowledge gaps - NOT clinical assessment.
+
+QUESTIONNAIRE RESPONSES:
 ${formattedResponses}
 
-Based on these responses, please provide:
+COMMUNICATION PARTNERS:
+${formattedPartners}
 
-1. COMMUNICATION_PARTNERS: Identify the key communication partners and categorize them (family, professionals, peers, etc.)
-2. COMMUNICATION_CONTEXTS: Identify the main contexts/locations where communication occurs
-3. TOPICS_OF_INTEREST: Extract topics of interest or preferred activities
-4. COMMUNICATION_PATTERNS: Identify any patterns in how the AAC user communicates
-5. STRENGTHS: Identify communication strengths
-6. CHALLENGES: Identify communication challenges
-7. RECOMMENDATIONS: Provide 3-5 specific recommendations for personalizing the AAC system
+Based on this data, build a knowledge graph focused on:
 
-Format your response as JSON with the following structure:
+1. PERSONAL_PROFILE: Extract the individual's name, core interests, preferences, and personal characteristics
+2. KNOWLEDGE_GRAPH: Identify entities (people, places, topics) and their relationships for AAC context
+3. COMMUNICATION_CONTEXT: Map communication environments, methods, and social circles
+4. KNOWLEDGE_GAPS: Identify missing information that would improve AAC personalization
+5. PASSPORT_CONTENT: Generate content for a communication passport (greeting, about me, communication tips)
+
+This is for AAC PERSONALIZATION and KNOWLEDGE GRAPH BUILDING, not clinical assessment.
+
+Format your response as JSON:
 {
-  "communicationPartners": {
-    "family": ["name1", "name2"],
-    "professionals": ["name1", "name2"],
-    "peers": ["name1", "name2"]
+  "personalProfile": {
+    "name": "extracted name or 'Not specified'",
+    "interests": ["interest1", "interest2"],
+    "preferences": ["preference1", "preference2"]
   },
-  "communicationContexts": ["context1", "context2"],
-  "topicsOfInterest": ["topic1", "topic2"],
-  "communicationPatterns": ["pattern1", "pattern2"],
-  "strengths": ["strength1", "strength2"],
-  "challenges": ["challenge1", "challenge2"],
-  "recommendations": ["recommendation1", "recommendation2", "recommendation3"]
-}
+  "knowledgeGraph": {
+    "entities": [
+      {"type": "person|place|topic", "name": "entity name", "relationship": "relationship type", "context": "context info"}
+    ],
+    "relationships": [
+      {"from": "entity1", "to": "entity2", "type": "relationship_type", "frequency": "frequency if applicable"}
+    ]
+  },
+  "communicationContext": {
+    "primaryEnvironments": ["environment1", "environment2"],
+    "communicationMethods": ["method1", "method2"],
+    "socialCircles": ["circle1", "circle2"]
+  },
+  "knowledgeGaps": [
+    "gap1: what specific information is missing",
+    "gap2: what would improve personalization"
+  ],
+  "passportContent": {
+    "greeting": "A personal greeting/introduction",
+    "aboutMe": "Key personal information",
+    "communicationTips": "How others can best communicate with this person"
+  }
+}`;
 
-If any section cannot be determined from the responses, include an empty array for that section.
-`,
-    })
+    // Provider switch
+    let llm;
+    if (LLM_PROVIDER === "gemini") {
+      console.log("Using Gemini provider");
+      llm = new ChatGoogleGenerativeAI({
+        apiKey: GEMINI_API_KEY!,
+        model: "gemini-1.5-flash",
+        maxOutputTokens: 2000,
+        temperature: 0.3,
+      });
+    } else {
+      console.log("Using OpenAI provider");
+      llm = new ChatOpenAI({
+        apiKey: OPENAI_API_KEY!,
+        modelName: "gpt-4o",
+        maxTokens: 1000,
+        temperature: 0.3,
+      });
+    }
 
-    // Robustly parse the response (plain JSON, code block, or Vercel/streamed)
-    let parsed;
-    let jsonString = '';
-    let data: any = text;
-    // If text is a string, try to parse as JSON
-    if (typeof text === 'string') {
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        // leave as string
-      }
-    }
-    // If data is an object with numbered keys (Vercel AI SDK style)
-    if (data && typeof data === 'object') {
-      const numberedKeys = Object.keys(data)
-        .filter(k => /^\d+$/.test(k))
-        .sort((a, b) => Number(a) - Number(b));
-      if (numberedKeys.length > 0) {
-        const concatenated = numberedKeys.map(k => data[k]).join('');
-        // Extract code block
-        const codeBlockMatch = concatenated.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        if (codeBlockMatch) {
-          jsonString = codeBlockMatch[1];
-          try {
-            parsed = JSON.parse(jsonString);
-          } catch (err) {
-            console.error('Failed to parse JSON from code block (numbered keys):', err, jsonString);
-            parsed = { error: 'Invalid JSON in code block', raw: jsonString };
-          }
-        } else {
-          // Try to extract JSON from any curly-brace block
-          const curlyBlockMatch = concatenated.match(/({[\s\S]*})/);
-          if (curlyBlockMatch) {
-            jsonString = curlyBlockMatch[1];
-            try {
-              parsed = JSON.parse(jsonString);
-            } catch (err2) {
-              console.error('Failed to parse JSON from curly braces (numbered keys):', err2, jsonString);
-              parsed = { error: 'Invalid JSON in curly braces', raw: jsonString };
-            }
-          } else {
-            parsed = { error: 'No JSON found in streamed response', raw: concatenated };
-          }
-        }
-        return NextResponse.json(parsed);
-      }
-    }
-    // If data is a string, try to extract code block or curly braces
-    if (typeof data === 'string') {
-      const codeBlockMatch = data.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (codeBlockMatch) {
+    const response = await llm.invoke([
+      { role: "system", content: "You are an expert in AAC and communication analysis. Always respond with valid JSON." },
+      { role: "user", content: prompt },
+    ]);
+
+    // Log the raw LLM response for debugging
+    console.log("Raw LLM response:", response);
+    console.log("Raw LLM response.content:", response.content);
+
+    // Extract JSON from LangChain response.content
+    let jsonString = "";
+    if (typeof response.content === "string") {
+      // Try to extract a code block
+      const codeBlockMatch = response.content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (codeBlockMatch && codeBlockMatch[1]) {
         jsonString = codeBlockMatch[1];
-        try {
-          parsed = JSON.parse(jsonString);
-        } catch (err) {
-          console.error('Failed to parse JSON from code block:', err, jsonString);
-          parsed = { error: 'Invalid JSON in code block', raw: jsonString };
-        }
       } else {
-        const curlyBlockMatch = data.match(/({[\s\S]*})/);
-        if (curlyBlockMatch) {
+        // Try to find the first {...} block
+        const curlyBlockMatch = response.content.match(/({[\s\S]*})/);
+        if (curlyBlockMatch && curlyBlockMatch[1]) {
           jsonString = curlyBlockMatch[1];
-          try {
-            parsed = JSON.parse(jsonString);
-          } catch (err2) {
-            console.error('Failed to parse JSON from curly braces:', err2, jsonString);
-            parsed = { error: 'Invalid JSON in curly braces', raw: jsonString };
-          }
-        } else {
-          parsed = { error: 'No JSON found in response', raw: data };
         }
       }
-      return NextResponse.json(parsed);
     }
-    // Fallback: return whatever data is
-    return NextResponse.json(data);
+
+    if (jsonString) {
+      try {
+        const parsed = JSON.parse(jsonString);
+        return NextResponse.json(parsed, { status: 200 });
+      } catch (err) {
+        console.error("Failed to parse JSON from model response:", err, jsonString);
+        return NextResponse.json({ error: "Failed to parse JSON from LLM response", raw: jsonString }, { status: 500 });
+      }
+    } else {
+      // No valid JSON found in LLM response.content
+      return NextResponse.json({ error: "No JSON found in LLM response", raw: response.content }, { status: 500 });
+    }
   } catch (error) {
     console.error("Error in analyze-responses API:", error)
+
+    // Check if it's a quota/rate limit error and provide fallback
+    if (typeof error === "object" && error !== null && "message" in error) {
+      const errorMessage = (error as any).message;
+      if (errorMessage.includes("quota") || errorMessage.includes("429") || errorMessage.includes("rate limit")) {
+        console.log("API quota exceeded, using fallback response");
+        return NextResponse.json({
+          personalProfile: {
+            name: "User",
+            interests: ["Daily activities", "Communication"],
+            preferences: ["Visual aids", "Routine interactions"]
+          },
+          knowledgeGraph: {
+            entities: [
+              { type: "person", name: "Family Member", relationship: "family", context: "daily communication" },
+              { type: "place", name: "Home", context: "primary environment" }
+            ],
+            relationships: [
+              { from: "User", to: "Family Member", type: "communicates_with", frequency: "daily" }
+            ]
+          },
+          communicationContext: {
+            primaryEnvironments: ["Home"],
+            communicationMethods: ["Visual aids"],
+            socialCircles: ["Family"]
+          },
+          knowledgeGaps: [
+            "Need more specific interest details",
+            "Communication preferences in different settings"
+          ],
+          passportContent: {
+            greeting: "Hello! I enjoy communicating with my family and friends.",
+            aboutMe: "I prefer clear, simple communication.",
+            communicationTips: "Please be patient and use visual supports when possible."
+          },
+          error: "API quota exceeded. Using demo fallback."
+        }, { status: 200 });
+      }
+      return NextResponse.json({ error: "An error occurred", details: errorMessage }, { status: 500 });
+    }
     return NextResponse.json({ error: "Failed to analyze responses" }, { status: 500 })
   }
 }

@@ -10,8 +10,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "AAC Context-Aware Personalization",
-  description: "A tool for creating personalized AAC experiences based on social context",
-    generator: 'v0.dev'
+  description: "A tool for creating personalized AAC experiences based on social context"
 }
 
 export default function RootLayout({
